@@ -1,0 +1,48 @@
+# Standalone Scheme Authority — for running the SA without the full RI stack.
+#
+# Pre-requisite:
+#   python3 pki/setup_dev_pki.py
+#
+# This generates pki/generated/{intermediate,root}-ca.{key,cert}.pem.
+# The key files are gitignored; the cert files are committed as public
+# trust anchors (all PISPs need them to validate the CA chain).
+#
+# Connecting PISPs must be pointed at this SA via SCHEME_AUTHORITY_URL.
+# Default: http://localhost:8060  (accessible to other local services on host network)
+#
+# Admin UI:  http://localhost:8060/ui/
+# API docs:  http://localhost:8060/docs
+# CRL:       http://localhost:8060/scheme/crl
+# Directory: http://localhost:8060/scheme/pisps
+
+services:
+  scheme-authority:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8060:8000"
+    volumes:
+      - ./pki/generated:/data/pki:ro
+      - sa-data:/data
+    environment:
+      - SA_DB_URL=sqlite:////data/sa.db
+      - BUILD_COMMIT=${BUILD_COMMIT:-dev}
+      - BUILD_TIME=${BUILD_TIME:-local}
+      - SA_AUTO_APPROVE=true
+      - INTERMEDIATE_CA_KEY_FILE=/data/pki/intermediate-ca.key.pem
+      - INTERMEDIATE_CA_CERT_FILE=/data/pki/intermediate-ca.cert.pem
+      - ROOT_CA_CERT_FILE=/data/pki/root-ca.cert.pem
+      - CRL_NEXT_UPDATE_HOURS=24
+      - OPERATOR_EMAIL=admin@scheme.openpisp.local
+      - OPERATOR_PASSWORD=scheme-admin-password
+      - SA_JWT_SECRET=dev-sa-secret-change-in-production
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  sa-data:
